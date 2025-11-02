@@ -49,12 +49,23 @@ export class AgentCoreStack extends cdk.Stack {
     const region = cdk.Stack.of(this).region;
     const discoveryUrl = `https://cognito-idp.${region}.amazonaws.com/${props.userPool.userPoolId}/.well-known/openid-configuration`;
 
-    // Step 1: Upload agent source code to S3
-    // BucketDeployment extracts files to the destination prefix
+    // Step 1: Upload only the essential agent files (exclude heavy directories)
     const agentSourceUpload = new s3deploy.BucketDeployment(this, 'AgentSourceUpload', {
-      sources: [s3deploy.Source.asset('../agent')],
+      sources: [s3deploy.Source.asset('../agent', {
+        exclude: [
+          'venv/**',           // Python virtual environment (can be 100+ MB)
+          '__pycache__/**',    // Python cache files
+          '*.pyc',             // Compiled Python files
+          '.git/**',           // Git files
+          'node_modules/**',   // Node modules if any
+          '.DS_Store',         // macOS files
+          '*.log',             // Log files
+          'build/**',          // Build artifacts
+          'dist/**',           // Distribution files
+        ]
+      })],
       destinationBucket: sourceBucket,
-      destinationKeyPrefix: 'agent-source/',  // Upload to agent-source/ folder
+      destinationKeyPrefix: 'agent-source/',
       prune: false,
       retainOnDelete: false,
     });
@@ -84,6 +95,8 @@ export class AgentCoreStack extends cdk.Stack {
           resources: [buildProjectArn],
         }),
       ]),
+      // Add timeout to prevent hanging
+      timeout: cdk.Duration.minutes(5),
     });
 
     // Ensure build happens after source upload
