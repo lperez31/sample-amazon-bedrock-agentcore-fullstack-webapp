@@ -15,10 +15,12 @@ import PromptInput from '@cloudscape-design/components/prompt-input';
 import Alert from '@cloudscape-design/components/alert';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import AuthModal from './AuthModal';
-import { getCurrentUser, getIdToken, signOut, AuthUser } from './auth';
 import { invokeAgent } from './agentcore';
 import './markdown.css';
+
+interface AuthUser {
+  email: string;
+}
 
 interface Message {
   type: 'user' | 'agent';
@@ -37,6 +39,9 @@ interface MessageFeedback {
 }
 
 function App() {
+  const isLocalDev = (import.meta as any).env.VITE_LOCAL_DEV === 'true';
+
+  // All hooks declared at the top level to maintain consistent order
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,13 +51,33 @@ function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [messageFeedback, setMessageFeedback] = useState<MessageFeedback>({});
   const [showSupportPrompts, setShowSupportPrompts] = useState(true);
+  const [AuthModalComponent, setAuthModalComponent] = useState<any>(null);
 
+  // Authentication effect
   useEffect(() => {
-    checkAuth();
-  }, []);
+    if (isLocalDev) {
+      // Skip authentication in local development mode
+      setCheckingAuth(false);
+      setUser({ email: 'local-dev@example.com' } as AuthUser);
+    } else {
+      checkAuth();
+    }
+  }, [isLocalDev]);
+
+  // AuthModal loading effect
+  useEffect(() => {
+    if (!isLocalDev && showAuthModal && !AuthModalComponent) {
+      import('./AuthModal').then(module => {
+        setAuthModalComponent(() => module.default);
+      });
+    }
+  }, [showAuthModal, AuthModalComponent, isLocalDev]);
 
   const checkAuth = async () => {
+    if (isLocalDev) return;
+
     try {
+      const { getCurrentUser } = await import('./auth');
       const currentUser = await getCurrentUser();
       setUser(currentUser);
     } catch (err) {
@@ -62,8 +87,15 @@ function App() {
     }
   };
 
-  const handleSignOut = () => {
-    signOut();
+  const handleSignOut = async () => {
+    if (isLocalDev) return;
+
+    try {
+      const { signOut } = await import('./auth');
+      signOut();
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
     setUser(null);
     setMessages([]);
   };
@@ -74,16 +106,13 @@ function App() {
   };
 
   const handleFeedback = async (messageIndex: number, feedbackType: 'helpful' | 'not-helpful') => {
-    // Set submitting state
     setMessageFeedback(prev => ({
       ...prev,
       [messageIndex]: { ...prev[messageIndex], submitting: true }
     }));
 
-    // Simulate feedback submission (you can add actual API call here)
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // Set feedback submitted
     setMessageFeedback(prev => ({
       ...prev,
       [messageIndex]: { feedback: feedbackType, submitting: false }
@@ -94,13 +123,11 @@ function App() {
     try {
       await navigator.clipboard.writeText(content);
 
-      // Show success indicator
       setMessageFeedback(prev => ({
         ...prev,
         [messageIndex]: { ...prev[messageIndex], showCopySuccess: true }
       }));
 
-      // Hide success indicator after 2 seconds
       setTimeout(() => {
         setMessageFeedback(prev => ({
           ...prev,
@@ -113,31 +140,23 @@ function App() {
   };
 
   const cleanResponse = (response: string): string => {
-    // Remove surrounding quotes if present
     let cleaned = response.trim();
     if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
       (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
       cleaned = cleaned.slice(1, -1);
     }
-
-    // Replace literal \n with actual newlines
     cleaned = cleaned.replace(/\\n/g, '\n');
-
-    // Replace literal \t with actual tabs
     cleaned = cleaned.replace(/\\t/g, '\t');
-
     return cleaned;
   };
 
   const handleSupportPromptClick = (promptText: string) => {
-    // Fill the prompt input with the selected text
     setPrompt(promptText);
-    // Hide support prompts after selection
     setShowSupportPrompts(false);
   };
 
   const handleSendMessage = async () => {
-    if (!user) {
+    if (!isLocalDev && !user) {
       setShowAuthModal(true);
       return;
     }
@@ -147,7 +166,6 @@ function App() {
       return;
     }
 
-    // Hide support prompts when sending a message
     setShowSupportPrompts(false);
 
     const userMessage: Message = {
@@ -172,8 +190,6 @@ function App() {
       };
 
       setMessages(prev => [...prev, agentMessage]);
-
-      // Show support prompts after agent responds
       setShowSupportPrompts(true);
     } catch (err: any) {
       setError(err.message);
@@ -182,9 +198,7 @@ function App() {
     }
   };
 
-  // Get contextual support prompts based on conversation
   const getSupportPrompts = () => {
-    // Initial prompts when no messages
     if (messages.length === 0) {
       return [
         { id: 'calc', text: 'What is 123 + 456?' },
@@ -194,12 +208,10 @@ function App() {
       ];
     }
 
-    // Contextual prompts based on last message
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.type === 'agent') {
       const content = lastMessage.content.toLowerCase();
 
-      // After calculation
       if (content.includes('result') || content.includes('sum') || content.includes('calculation')) {
         return [
           { id: 'another-calc', text: 'Can you do another calculation?' },
@@ -208,7 +220,6 @@ function App() {
         ];
       }
 
-      // After weather
       if (content.includes('weather') || content.includes('sunny') || content.includes('°f')) {
         return [
           { id: 'calc-follow', text: 'What is 999 + 111?' },
@@ -217,7 +228,6 @@ function App() {
         ];
       }
 
-      // After table
       if (content.includes('|') || content.includes('table')) {
         return [
           { id: 'another-table', text: 'Create another table with different data' },
@@ -227,15 +237,12 @@ function App() {
       }
     }
 
-    // Default follow-up prompts
     return [
       { id: 'more', text: 'Tell me more' },
       { id: 'calc-default', text: 'Do a calculation' },
       { id: 'weather-default', text: 'Check the weather' }
     ];
   };
-
-
 
   if (checkingAuth) {
     return (
@@ -283,17 +290,27 @@ function App() {
 
   return (
     <>
-      <AuthModal
-        visible={showAuthModal}
-        onDismiss={() => setShowAuthModal(false)}
-        onSuccess={handleAuthSuccess}
-      />
+      {!isLocalDev && AuthModalComponent && (
+        <AuthModalComponent
+          visible={showAuthModal}
+          onDismiss={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
       <TopNavigation
         identity={{
           href: "#",
-          title: "Amazon Bedrock AgentCore Demo"
+          title: isLocalDev
+            ? "Amazon Bedrock AgentCore Demo (Local Dev)"
+            : "Amazon Bedrock AgentCore Demo"
         }}
-        utilities={[
+        utilities={isLocalDev ? [
+          {
+            type: "button",
+            text: "Local Development",
+            iconName: "settings"
+          }
+        ] : [
           {
             type: "button",
             text: user ? `${user.email} | Sign Out` : "Sign In",
@@ -366,7 +383,6 @@ function App() {
                                     <ReactMarkdown
                                       remarkPlugins={[remarkGfm]}
                                       components={{
-                                        // Style code blocks
                                         code: ({ className, children }: any) => {
                                           const inline = !className;
                                           return inline ? (
@@ -394,13 +410,11 @@ function App() {
                                             </pre>
                                           );
                                         },
-                                        // Style links
                                         a: ({ children, href }: any) => (
                                           <a href={href} style={{ color: '#0972d3' }} target="_blank" rel="noopener noreferrer">
                                             {children}
                                           </a>
                                         ),
-                                        // Style lists
                                         ul: ({ children }: any) => (
                                           <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
                                             {children}
@@ -411,7 +425,6 @@ function App() {
                                             {children}
                                           </ol>
                                         ),
-                                        // Style paragraphs
                                         p: ({ children }: any) => (
                                           <p style={{ marginTop: '8px', marginBottom: '8px' }}>
                                             {children}

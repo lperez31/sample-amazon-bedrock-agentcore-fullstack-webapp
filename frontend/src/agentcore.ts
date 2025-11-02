@@ -1,9 +1,10 @@
 // Note: Using direct HTTP calls to AgentCore with JWT bearer tokens
 // as shown in AWS AgentCore documentation
-import { getAccessToken } from './auth';
 
-const region = import.meta.env.VITE_REGION || 'us-east-1';
-const agentRuntimeArn = import.meta.env.VITE_AGENT_RUNTIME_ARN;
+const region = (import.meta as any).env.VITE_REGION || 'us-east-1';
+const agentRuntimeArn = (import.meta as any).env.VITE_AGENT_RUNTIME_ARN;
+const isLocalDev = (import.meta as any).env.VITE_LOCAL_DEV === 'true';
+const localAgentUrl = (import.meta as any).env.VITE_AGENT_RUNTIME_URL || '/api';
 
 export interface InvokeAgentRequest {
   prompt: string;
@@ -15,18 +16,69 @@ export interface InvokeAgentResponse {
 
 export const invokeAgent = async (request: InvokeAgentRequest): Promise<InvokeAgentResponse> => {
   try {
+    // Local development mode - call local AgentCore instance
+    if (isLocalDev) {
+      console.log('Invoking local AgentCore:', { url: localAgentUrl });
+      console.log('Request payload:', { prompt: request.prompt });
+      
+      const response = await fetch(`${localAgentUrl}/invocations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: request.prompt
+        }),
+      });
+      
+      console.log('Local AgentCore response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Local AgentCore error response:', errorText);
+        throw new Error(`Local AgentCore invocation failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      let data;
+      try {
+        data = await response.json();
+        console.log('Local AgentCore response data:', data);
+      } catch (parseError) {
+        console.error('Failed to parse JSON response:', parseError);
+        const textResponse = await response.text();
+        console.log('Raw response text:', textResponse);
+        throw new Error(`Invalid JSON response from local AgentCore: ${textResponse}`);
+      }
+      
+      // Handle different response formats from AgentCore
+      let responseText = '';
+      if (typeof data === 'string') {
+        responseText = data;
+      } else if (data && typeof data === 'object') {
+        responseText = data.response || data.content || data.text || data.message || data.output || JSON.stringify(data);
+      } else {
+        responseText = 'No response from agent';
+      }
+      
+      console.log('Final response text:', responseText);
+      
+      return {
+        response: responseText
+      };
+    }
+
+    // Production mode - call AWS AgentCore
     // Check if runtime ARN is available
     if (!agentRuntimeArn) {
       throw new Error('AgentCore Runtime ARN not configured. Please check deployment.');
     }
 
     // Get JWT access token from Cognito (required for AgentCore as per AWS documentation)
+    const { getAccessToken } = await import('./auth');
     const jwtToken = await getAccessToken();
     if (!jwtToken) {
       throw new Error('Not authenticated - no access token available');
     }
-
-
 
     // URL encode the agent runtime ARN for the API call (as per AWS documentation)
     const encodedAgentRuntimeArn = encodeURIComponent(agentRuntimeArn);

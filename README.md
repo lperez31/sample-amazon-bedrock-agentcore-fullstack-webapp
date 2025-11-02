@@ -16,7 +16,9 @@ Flow:
 
 ## Quick Start
 
-### Prerequisites
+### Cloud Deployment
+
+#### Prerequisites
 - **AWS CLI v2.31.13 or later** installed and configured ([Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
   - Check your version: `aws --version`
   - AgentCore support was added in AWS CLI v2.31.13 (January 2025)
@@ -27,13 +29,13 @@ Flow:
   - Environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - **No Docker required!** (CodeBuild handles container builds)
 
-### ⚠️ Important: Region Requirements
+#### ⚠️ Important: Region Requirements
 
 **Amazon Bedrock AgentCore is only available in specific AWS regions.**
 
 Before deploying, verify AgentCore availability in your target region by checking the [AWS AgentCore Regions Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-regions.html).
 
-### One-Command Deploy
+#### One-Command Deploy
 
 **Windows (PowerShell):**
 ```powershell
@@ -58,7 +60,7 @@ chmod +x deploy-all.sh scripts/build-frontend.sh
 
 > **Architecture Note**: This demo uses a simple architecture where the React frontend calls AgentCore directly with JWT authentication.
 
-### Test Your App
+#### Test Your App
 
 1. Open the CloudFront URL from deployment output
 2. **Click "Sign In"** in the header
@@ -76,6 +78,42 @@ Try these prompts:
 - "Calculate 123 * 456"
 - "What is 2 to the power of 10?"
 
+### Local Development Mode
+
+For rapid development without AWS deployment:
+
+**Prerequisites:**
+- **Python 3.8+** with pip
+- **Node.js 18+** with npm
+- **AWS credentials** configured with permissions for Bedrock model invocation. The default example invokes Anthropic Claude Haiku 4.5, model id `global.anthropic.claude-haiku-4-5-20251001-v1:0`.
+
+**Start Local Development:**
+
+**macOS/Linux:**
+```bash
+chmod +x dev-local.sh
+./dev-local.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\dev-local.ps1
+```
+
+This will:
+1. Create a Python virtual environment and install agent dependencies
+2. Install frontend dependencies
+3. Start the AgentCore agent locally on `http://localhost:8080`
+4. Start the frontend dev server on `http://localhost:5173`
+5. Configure the frontend to call the local agent (no authentication required)
+
+**Local Development Features:**
+- ✅ Hot reload for both frontend and agent changes
+- ✅ Authentication with Cognito is bypassed
+- ✅ Same agent code as production
+- ✅ Fast iteration cycle
+
+**Note:** Local development uses the same `strands_agent.py` file as production. Changes made locally will be reflected when you deploy.
 
 ## Stack Architecture
 
