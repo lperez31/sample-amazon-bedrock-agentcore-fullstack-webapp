@@ -106,13 +106,16 @@ function App() {
   };
 
   const handleFeedback = async (messageIndex: number, feedbackType: 'helpful' | 'not-helpful') => {
+    // Set submitting state
     setMessageFeedback(prev => ({
       ...prev,
       [messageIndex]: { ...prev[messageIndex], submitting: true }
     }));
 
+    // Simulate feedback submission (you can add actual API call here)
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    // Set feedback submitted
     setMessageFeedback(prev => ({
       ...prev,
       [messageIndex]: { feedback: feedbackType, submitting: false }
@@ -123,11 +126,13 @@ function App() {
     try {
       await navigator.clipboard.writeText(content);
 
+      // Show success indicator
       setMessageFeedback(prev => ({
         ...prev,
         [messageIndex]: { ...prev[messageIndex], showCopySuccess: true }
       }));
 
+      // Hide success indicator after 2 seconds
       setTimeout(() => {
         setMessageFeedback(prev => ({
           ...prev,
@@ -140,18 +145,23 @@ function App() {
   };
 
   const cleanResponse = (response: string): string => {
+    // Remove surrounding quotes if present
     let cleaned = response.trim();
     if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
       (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
       cleaned = cleaned.slice(1, -1);
     }
+    // Replace literal \n with actual newlines
     cleaned = cleaned.replace(/\\n/g, '\n');
+    // Replace literal \t with actual tabs
     cleaned = cleaned.replace(/\\t/g, '\t');
     return cleaned;
   };
 
   const handleSupportPromptClick = (promptText: string) => {
+    // Fill the prompt input with the selected text
     setPrompt(promptText);
+    // Hide support prompts after selection
     setShowSupportPrompts(false);
   };
 
@@ -166,6 +176,7 @@ function App() {
       return;
     }
 
+    // Hide support prompts when sending a message
     setShowSupportPrompts(false);
 
     const userMessage: Message = {
@@ -190,6 +201,7 @@ function App() {
       };
 
       setMessages(prev => [...prev, agentMessage]);
+      // Show support prompts after agent responds
       setShowSupportPrompts(true);
     } catch (err: any) {
       setError(err.message);
@@ -198,7 +210,9 @@ function App() {
     }
   };
 
+  // Get contextual support prompts based on conversation
   const getSupportPrompts = () => {
+    // Initial prompts when no messages
     if (messages.length === 0) {
       return [
         { id: 'calc', text: 'What is 123 + 456?' },
@@ -208,10 +222,12 @@ function App() {
       ];
     }
 
+    // Contextual prompts based on last message
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.type === 'agent') {
       const content = lastMessage.content.toLowerCase();
 
+      // After calculation
       if (content.includes('result') || content.includes('sum') || content.includes('calculation')) {
         return [
           { id: 'another-calc', text: 'Can you do another calculation?' },
@@ -220,6 +236,7 @@ function App() {
         ];
       }
 
+      // After weather
       if (content.includes('weather') || content.includes('sunny') || content.includes('°f')) {
         return [
           { id: 'calc-follow', text: 'What is 999 + 111?' },
@@ -228,6 +245,7 @@ function App() {
         ];
       }
 
+      // After table
       if (content.includes('|') || content.includes('table')) {
         return [
           { id: 'another-table', text: 'Create another table with different data' },
@@ -237,6 +255,7 @@ function App() {
       }
     }
 
+    // Default follow-up prompts
     return [
       { id: 'more', text: 'Tell me more' },
       { id: 'calc-default', text: 'Do a calculation' },
@@ -383,6 +402,7 @@ function App() {
                                     <ReactMarkdown
                                       remarkPlugins={[remarkGfm]}
                                       components={{
+                                        // Style code blocks
                                         code: ({ className, children }: any) => {
                                           const inline = !className;
                                           return inline ? (
@@ -410,11 +430,13 @@ function App() {
                                             </pre>
                                           );
                                         },
+                                        // Style links
                                         a: ({ children, href }: any) => (
                                           <a href={href} style={{ color: '#0972d3' }} target="_blank" rel="noopener noreferrer">
                                             {children}
                                           </a>
                                         ),
+                                        // Style lists
                                         ul: ({ children }: any) => (
                                           <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
                                             {children}
@@ -425,6 +447,7 @@ function App() {
                                             {children}
                                           </ol>
                                         ),
+                                        // Style paragraphs
                                         p: ({ children }: any) => (
                                           <p style={{ marginTop: '8px', marginBottom: '8px' }}>
                                             {children}
